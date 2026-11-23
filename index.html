@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Montaña Rusa 3D - Edición Looping</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            background-color: #000000;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
+        }
+
+        /* --- PANTALLA DE INICIO EN NEGRO --- */
+        #pantalla-inicio {
+            position: fixed;
+            inset: 0;
+            background-color: #000000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 30;
+            transition: opacity 0.6s ease;
+        }
+
+        #btn-inicio {
+            background-color: transparent;
+            color: #999999;
+            border: 1px solid #333333;
+            padding: 8px 22px;
+            font-size: 13px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: all 0.3s ease;
+        }
+
+        #btn-inicio:hover {
+            color: #ffffff;
+            border-color: #00f3ff;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
+        }
+
+        /* --- CONTENEDOR 3D --- */
+        #escena-3d {
+            position: fixed;
+            inset: 0;
+            display: none;
+            z-index: 10;
+        }
+
+        /* --- INDICADORES EN PANTALLA (HUD) --- */
+        #hud-inferior {
+            position: fixed;
+            bottom: 18px;
+            left: 20px;
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        .dato-hud {
+            color: rgba(0, 243, 255, 0.85);
+            font-size: 13px;
+            letter-spacing: 2px;
+            text-shadow: 0 0 8px rgba(0, 243, 255, 0.5);
+        }
+
+        .sub-hud {
+            color: rgba(255, 255, 255, 0.45);
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+
+        /* --- BOTONES SUPERIORES DERECHOS --- */
+        #controles-superiores {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            display: none;
+            gap: 8px;
+            z-index: 40;
+        }
+
+        .btn-mini {
+            background: rgba(0, 0, 0, 0.65);
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            padding: 6px 12px;
+            font-size: 11px;
+            font-family: Arial, sans-serif;
+            letter-spacing: 1px;
+            border-radius: 4px;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            transition: all 0.2s ease;
+        }
+
+        .btn-mini:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: #00f3ff;
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Audio MP3 personalizado -->
+    <audio id="musica-mp3" src="musica1.mp3" loop preload="auto"></audio>
+
+    <!-- Pantalla inicial negra -->
+    <div id="pantalla-inicio">
+        <button id="btn-inicio">Inicio</button>
+    </div>
+
+    <!-- Escena 3D -->
+    <div id="escena-3d"></div>
+
+    <!-- Telemetría discreta -->
+    <div id="hud-inferior">
+        <div class="dato-hud">VELOCIDAD: <span id="kmh">0</span> KM/H // ALTURA: <span id="altitud">0</span> M</div>
+        <div class="sub-hud">Mueve el ratón para mirar alrededor</div>
+    </div>
+
+    <!-- Botones superiores derechos -->
+    <div id="controles-superiores">
+        <button id="btn-audio" class="btn-mini">🔊 SONIDO: ON</button>
+        <button id="btn-volver" class="btn-mini">↺ INICIO</button>
+    </div>
+
+    <!-- Librería Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        const pantallaInicio = document.getElementById('pantalla-inicio');
+        const escena3D = document.getElementById('escena-3d');
+        const controlesSuperiores = document.getElementById('controles-superiores');
+        const hudInferior = document.getElementById('hud-inferior');
+        const textoKmh = document.getElementById('kmh');
+        const textoAltitud = document.getElementById('altitud');
+        const btnInicio = document.getElementById('btn-inicio');
+        const btnAudio = document.getElementById('btn-audio');
+        const btnVolver = document.getElementById('btn-volver');
+        const musicaMp3 = document.getElementById('musica-mp3');
+
+        let sonidoActivo = true;
+        let usandoMp3 = false;
+        let audioCtx = null;
+        let vientoGain = null;
+        let vientoFilter = null;
+        let vientoSource = null;
+        let traqueteoInterval = null;
+        let animacionId = null;
+
+        musicaMp3.addEventListener('canplaythrough', () => {
+            usandoMp3 = true;
+        });
+
+        // --- SISTEMA DE AUDIO (MP3 + Viento + Traqueteo de raíles) ---
+        function iniciarAudio() {
+            if (!sonidoActivo) return;
+
+            if (usandoMp3) {
+                musicaMp3.currentTime = 0;
+                musicaMp3.play().catch(() => iniciarSonidoAmbienteVagon());
+            } else {
+                musicaMp3.play().then(() => {
+                    usandoMp3 = true;
+                }).catch(() => {
+                    iniciarSonidoAmbienteVagon();
+                });
+            }
+        }
+
+        function iniciarSonidoAmbienteVagon() {
+            detenerSonidoAmbienteVagon();
+            if (!sonidoActivo) return;
+
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            // 1. Viento aerodinámico
+            const bufferSize = audioCtx.sampleRate * 2;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+
+            vientoSource = audioCtx.createBufferSource();
+            vientoSource.buffer = buffer;
+            vientoSource.loop = true;
+
+            vientoFilter = audioCtx.createBiquadFilter();
+            vientoFilter.type = 'bandpass';
+            vientoFilter.frequency.value = 300;
+            vientoFilter.Q.value = 1.4;
+
+            vientoGain = audioCtx.createGain();
+            vientoGain.gain.value = 0.04;
+
+            vientoSource.connect(vientoFilter);
+            vientoFilter.connect(vientoGain);
+            vientoGain.connect(audioCtx.destination);
+            vientoSource.start();
+
+            // 2. Traqueteo metálico periódico sobre las juntas de la vía
+            let velocidadActualFactor = 0.3;
+            window._actualizarFactorTraqueteo = (f) => { velocidadActualFactor = f; };
+
+            function golpeRail() {
+                if (!sonidoActivo || !audioCtx) return;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(95 + velocidadActualFactor * 45, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(35, audioCtx.currentTime + 0.06);
+
+                gain.gain.setValueAtTime(0.06 + velocidadActualFactor * 0.06, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.06);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.07);
+
+                const siguienteGolpeMs = Math.max(75, 280 - velocidadActualFactor * 200);
+                traqueteoInterval = setTimeout(golpeRail, siguienteGolpeMs);
+            }
+            golpeRail();
+        }
+
+        function actualizarAudioVagon(factorVelocidad) {
+            if (vientoFilter && vientoGain && audioCtx && sonidoActivo) {
+                vientoFilter.frequency.setTargetAtTime(220 + factorVelocidad * 1050, audioCtx.currentTime, 0.08);
+                vientoGain.gain.setTargetAtTime(0.025 + factorVelocidad * 0.15, audioCtx.currentTime, 0.08);
+            }
+            if (window._actualizarFactorTraqueteo) {
+                window._actualizarFactorTraqueteo(factorVelocidad);
+            }
+        }
+
+        function detenerSonidoAmbienteVagon() {
+            clearTimeout(traqueteoInterval);
+            if (vientoSource) {
+                try { vientoSource.stop(); vientoSource.disconnect(); } catch (e) {}
+                vientoSource = null;
+            }
+        }
+
+        function detenerTodoAudio() {
+            musicaMp3.pause();
+            detenerSonidoAmbienteVagon();
+        }
+
+        // --- CONSTRUCCIÓN DE LA MONTAÑA RUSA 3D ---
+        let scene, camera, renderer, curvaVia, grupoVagon;
+        let progreso = 0;
+        let velocidad = 0.00075;
+        let mirarX = 0, mirarY = 0;
+
+        function iniciarMontanaRusa() {
+            escena3D.innerHTML = '';
+            progreso = 0;
+            velocidad = 0.00075;
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x02040a);
+            scene.fog = new THREE.FogExp2(0x02040a, 0.0075);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 450);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            escena3D.appendChild(renderer.domElement);
+
+            // Iluminación ambiental y de entorno
+            const luzAmbiente = new THREE.AmbientLight(0x404870, 1.3);
+            scene.add(luzAmbiente);
+
+            const luzLuna = new THREE.DirectionalLight(0x88ccff, 0.7);
+            luzLuna.position.set(50, 120, 40);
+            scene.add(luzLuna);
+
+            // Suelo de rejilla luminosa + torres decorativas en el horizonte
+            const gridHelper = new THREE.GridHelper(500, 100, 0x00f3ff, 0x0f172a);
+            gridHelper.position.y = -2;
+            scene.add(gridHelper);
+
+            construirHorizonteParque();
+
+            // Cielo estrellado denso
+            const estrellasGeo = new THREE.BufferGeometry();
+            const estrellasPos = [];
+            for (let i = 0; i < 2200; i++) {
+                estrellasPos.push(
+                    (Math.random() - 0.5) * 420,
+                    Math.random() * 190 + 10,
+                    (Math.random() - 0.5) * 420
+                );
+            }
+            estrellasGeo.setAttribute('position', new THREE.Float32BufferAttribute(estrellasPos, 3));
+            const estrellasMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.65 });
+            scene.add(new THREE.Points(estrellasGeo, estrellasMat));
+
+            // Recorrido con gran subida, caída en picado, LOOPING 360° y túnel de velocidad
+            const puntos = [
+                new THREE.Vector3(0, 6, 10),
+                new THREE.Vector3(0, 46, -45),     // Gran ascensión inicial
+                new THREE.Vector3(22, 50, -90),    // Cima panorámica
+                new THREE.Vector3(60, 6, -100),    // Caída vertiginosa para coger impulso
+
+                // --- LOOPING VERTICAL 360° ---
+                new THREE.Vector3(82, 6, -100),    // Entrada al rizo
+                new THREE.Vector3(98, 22, -98),    // Subida vertical del rizo
+                new THREE.Vector3(84, 38, -95),    // Cima del rizo (¡boca abajo!)
+                new THREE.Vector3(68, 22, -92),    // Bajada vertical del rizo
+                new THREE.Vector3(84, 6, -90),     // Salida del rizo
+
+                // --- TRAMO DE VELOCIDAD Y TÚNEL ---
+                new THREE.Vector3(120, 14, -55),   // Curva peraltada rápida
+                new THREE.Vector3(115, 10, 10),    // Recta del túnel de luz
+                new THREE.Vector3(105, 8, 65),     // Salida del túnel
+
+                // --- COLINAS Y CURVAS FINALES ---
+                new THREE.Vector3(55, 34, 95),     // Segunda gran colina
+                new THREE.Vector3(0, 6, 95),       // Caída rápida
+                new THREE.Vector3(-55, 26, 70),    // Curva panorámica
+                new THREE.Vector3(-85, 6, 20),     // Rasante al suelo
+                new THREE.Vector3(-60, 20, -30),   // Elevación de retorno
+                new THREE.Vector3(-25, 10, -15)    // Entrada suave a estación
+            ];
+
+            curvaVia = new THREE.CatmullRomCurve3(puntos, true, 'catmullrom', 0.5);
+
+            // Construir vías, traviesas, pilares y túnel neón
+            construirViasYSoportes(curvaVia);
+            construirTunelYPortales(curvaVia);
+
+            // Construir la cabina del vagón en primera persona
+            grupoVagon = crearCabinaVagon();
+            scene.add(grupoVagon);
+
+            // Vector "arriba" suavizado para permitir el looping 360° sin saltos bruscos
+            let arribaActual = new THREE.Vector3(0, 1, 0);
+
+            function animar() {
+                animacionId = requestAnimationFrame(animar);
+
+                const posActual = curvaVia.getPointAt(progreso);
+                const tangente = curvaVia.getTangentAt(progreso).normalize();
+
+                // Física de gravedad realista
+                const aceleracionGravedad = -tangente.y * 0.000038;
+                velocidad += aceleracionGravedad;
+                velocidad = Math.max(0.0006, Math.min(0.0025, velocidad));
+
+                progreso = (progreso + velocidad) % 1;
+
+                // Actualizar telemetría (KM/H y Altura)
+                const kmh = Math.round(velocidad * 64000);
+                const altura = Math.max(0, Math.round(posActual.y));
+                textoKmh.textContent = kmh;
+                textoAltitud.textContent = altura;
+
+                // Actualizar audio según velocidad
+                const factorVel = (velocidad - 0.0006) / (0.0025 - 0.0006);
+                actualizarAudioVagon(factorVel);
+
+                // Efecto vértigo: abrir ligeramente el ángulo de visión (FOV) al ir muy rápido
+                const fovObjetivo = 74 + factorVel * 18;
+                camera.fov += (fovObjetivo - camera.fov) * 0.08;
+                camera.updateProjectionMatrix();
+
+                // Calcular orientación 3D completa (permite dar la vuelta completa en el looping)
+                const tangenteFutura = curvaVia.getPointAt((progreso + 0.015) % 1).sub(posActual).normalize();
+                const ejeLateral = new THREE.Vector3().crossVectors(tangente, arribaActual).normalize();
+
+                // Si estamos en el looping (entre t=0.20 y t=0.42), dejar que el vector arriba siga la curva vertical
+                const enLooping = (progreso > 0.20 && progreso < 0.43);
+                const arribaObjetivo = new THREE.Vector3().crossVectors(ejeLateral, tangente).normalize();
+
+                if (!enLooping) {
+                    // Fuera del looping, tender suavemente hacia el cielo (0,1,0) más peralte en curvas
+                    const giroLateral = tangente.x * tangenteFutura.z - tangente.z * tangenteFutura.x;
+                    arribaObjetivo.set(0, 1, 0).addScaledVector(ejeLateral, -giroLateral * 3.5).normalize();
+                }
+
+                arribaActual.lerp(arribaObjetivo, enLooping ? 0.25 : 0.12).normalize();
+
+                // Posicionar el vagón en la vía
+                grupoVagon.position.copy(posActual);
+                const matrizOrientacion = new THREE.Matrix4();
+                const puntoObjetivoVagon = posActual.clone().add(tangente);
+                matrizOrientacion.lookAt(puntoObjetivoVagon, posActual, arribaActual);
+                grupoVagon.quaternion.setFromRotationMatrix(matrizOrientacion);
+
+                // Posicionar la cámara dentro del asiento del vagón
+                const offsetOjos = new THREE.Vector3(0, 1.35, -0.2).applyQuaternion(grupoVagon.quaternion);
+                camera.position.copy(posActual).add(offsetOjos);
+
+                // Permitir mirar a los lados dentro del vagón con el ratón
+                const rotacionCabeza = new THREE.Euler(-mirarY * 0.45, -mirarX * 0.85, 0, 'YXZ');
+                const quatCabeza = new THREE.Quaternion().setFromEuler(rotacionCabeza);
+                camera.quaternion.copy(grupoVagon.quaternion).multiply(quatCabeza);
+
+                renderer.render(scene, camera);
+            }
+
+            animar();
+        }
+
+        function crearCabinaVagon() {
+            const vagon = new THREE.Group();
+
+            // Carrocería frontal aerodinámica oscura metálica
+            const matChasis = new THREE.MeshStandardMaterial({
+                color: 0x111827,
+                metalness: 0.85,
+                roughness: 0.2
+            });
+            const morro = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.55, 2.2), matChasis);
+            morro.position.set(0, 0.45, -1.1);
+            vagon.add(morro);
+
+            // Tira LED neón en el borde del vagón
+            const matNeon = new THREE.MeshBasicMaterial({ color: 0x00f3ff });
+            const bordeIzq = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 2.2), matNeon);
+            bordeIzq.position.set(-0.68, 0.73, -1.1);
+            vagon.add(bordeIzq);
+
+            const bordeDer = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 2.2), matNeon);
+            bordeDer.position.set(0.68, 0.73, -1.1);
+            vagon.add(bordeDer);
+
+            // Barra de seguridad frente al pasajero
+            const matBarra = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.6, roughness: 0.4 });
+            const barraHorizontal = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.2, 12), matBarra);
+            barraHorizontal.rotation.z = Math.PI / 2;
+            barraHorizontal.position.set(0, 0.82, -0.75);
+            vagon.add(barraHorizontal);
+
+            // Faros delanteros que alumbran las vías
+            const faroLuz = new THREE.SpotLight(0x00f3ff, 3.2, 65, Math.PI / 4, 0.4);
+            faroLuz.position.set(0, 0.6, -2.0);
+            faroLuz.target.position.set(0, 0.2, -15);
+            vagon.add(faroLuz);
+            vagon.add(faroLuz.target);
+
+            return vagon;
+        }
+
+        function construirViasYSoportes(curva) {
+            const divisiones = 600;
+            const puntosCentro = curva.getSpacedPoints(divisiones);
+
+            const puntosIzq = [];
+            const puntosDer = [];
+
+            const matTraviesa = new THREE.MeshStandardMaterial({ color: 0x00f3ff, emissive: 0x003355 });
+            const matPilar = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.3 });
+
+            for (let i = 0; i <= divisiones; i++) {
+                const t = i / divisiones;
+                const pt = puntosCentro[i];
+                const tangente = curva.getTangentAt(t).normalize();
+                const derecha = new THREE.Vector3().crossVectors(tangente, new THREE.Vector3(0, 1, 0)).normalize();
+
+                // Evitar inversión brusca de 'derecha' en el punto más alto del looping
+                if (derecha.lengthSq() < 0.01) derecha.set(1, 0, 0);
+
+                const pIzq = pt.clone().addScaledVector(derecha, -0.68);
+                const pDer = pt.clone().addScaledVector(derecha, 0.68);
+                puntosIzq.push(pIzq);
+                puntosDer.push(pDer);
+
+                // Traviesas cada 2 segmentos
+                if (i % 2 === 0 && i < divisiones) {
+                    const traviesa = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.12, 0.24), matTraviesa);
+                    traviesa.position.copy(pt);
+                    traviesa.lookAt(pt.clone().add(tangente));
+                    scene.add(traviesa);
+                }
+
+                // Pilares hasta el suelo (excepto justo dentro de la parte superior del looping)
+                const esCimaLooping = (t > 0.24 && t < 0.39);
+                if (i % 16 === 0 && i < divisiones && !esCimaLooping) {
+                    const alturaPilar = pt.y + 2;
+                    if (alturaPilar > 0) {
+                        const pilar = new THREE.Mesh(
+                            new THREE.CylinderGeometry(0.18, 0.26, alturaPilar, 8),
+                            matPilar
+                        );
+                        pilar.position.set(pt.x, (pt.y - 2) / 2, pt.z);
+                        scene.add(pilar);
+                    }
+                }
+            }
+
+            const curvaIzq = new THREE.CatmullRomCurve3(puntosIzq, true);
+            const curvaDer = new THREE.CatmullRomCurve3(puntosDer, true);
+
+            const matRail = new THREE.MeshStandardMaterial({
+                color: 0xff007f,
+                emissive: 0x440022,
+                metalness: 0.75,
+                roughness: 0.2
+            });
+
+            scene.add(new THREE.Mesh(new THREE.TubeGeometry(curvaIzq, 600, 0.1, 8, true), matRail));
+            scene.add(new THREE.Mesh(new THREE.TubeGeometry(curvaDer, 600, 0.1, 8, true), matRail));
+        }
+
+        function construirTunelYPortales(curva) {
+            // 1. Túnel de anillos hiperespaciales en la recta rápida (t de 0.50 a 0.64)
+            for (let t = 0.50; t <= 0.64; t += 0.01) {
+                const pt = curva.getPointAt(t);
+                const tangente = curva.getTangentAt(t).normalize();
+
+                const anilloGeo = new THREE.TorusGeometry(2.8, 0.09, 8, 32);
+                const colorAnillo = (Math.round(t * 100) % 2 === 0) ? 0x00f3ff : 0xb026ff;
+                const anilloMat = new THREE.MeshBasicMaterial({ color: colorAnillo });
+                const anillo = new THREE.Mesh(anilloGeo, anilloMat);
+
+                anillo.position.copy(pt);
+                anillo.lookAt(pt.clone().add(tangente));
+                scene.add(anillo);
+            }
+
+            // 2. Portales luminosos repartidos por el resto del circuito
+            const coloresPortal = [0x39ff14, 0xff007f, 0xfff01f, 0x00f3ff];
+            [0.08, 0.18, 0.45, 0.72, 0.85, 0.94].forEach((t, idx) => {
+                const pt = curva.getPointAt(t);
+                const tangente = curva.getTangentAt(t).normalize();
+                const arco = new THREE.Mesh(
+                    new THREE.TorusGeometry(3.4, 0.13, 8, 32, Math.PI),
+                    new THREE.MeshBasicMaterial({ color: coloresPortal[idx % coloresPortal.length] })
+                );
+                arco.position.copy(pt);
+                arco.lookAt(pt.clone().add(tangente));
+                scene.add(arco);
+            });
+        }
+
+        function construirHorizonteParque() {
+            // Torres luminosas lejanas para dar sensación de velocidad y profundidad
+            const coloresTorre = [0x00f3ff, 0xff007f, 0xb026ff, 0x39ff14];
+            for (let i = 0; i < 24; i++) {
+                const angulo = (i / 24) * Math.PI * 2;
+                const radio = 155 + (i % 3) * 25;
+                const x = Math.cos(angulo) * radio;
+                const z = Math.sin(angulo) * radio;
+                const altura = 25 + (i % 5) * 18;
+
+                const torre = new THREE.Mesh(
+                    new THREE.BoxGeometry(3, altura, 3),
+                    new THREE.MeshStandardMaterial({
+                        color: 0x0b1021,
+                        emissive: coloresTorre[i % coloresTorre.length],
+                        emissiveIntensity: 0.25
+                    })
+                );
+                torre.position.set(x, altura / 2 - 2, z);
+                scene.add(torre);
+            }
+        }
+
+        // --- EVENTOS DE BOTONES ---
+        btnInicio.addEventListener('click', () => {
+            pantallaInicio.style.display = 'none';
+            escena3D.style.display = 'block';
+            controlesSuperiores.style.display = 'flex';
+            hudInferior.style.display = 'flex';
+
+            iniciarMontanaRusa();
+            iniciarAudio();
+        });
+
+        btnAudio.addEventListener('click', () => {
+            sonidoActivo = !sonidoActivo;
+            if (sonidoActivo) {
+                btnAudio.textContent = '🔊 SONIDO: ON';
+                if (escena3D.style.display === 'block') {
+                    iniciarAudio();
+                }
+            } else {
+                btnAudio.textContent = '🔇 SONIDO: OFF';
+                detenerTodoAudio();
+            }
+        });
+
+        btnVolver.addEventListener('click', () => {
+            cancelAnimationFrame(animacionId);
+            detenerTodoAudio();
+
+            escena3D.style.display = 'none';
+            controlesSuperiores.style.display = 'none';
+            hudInferior.style.display = 'none';
+            pantallaInicio.style.display = 'flex';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            mirarX = (e.clientX / window.innerWidth) * 2 - 1;
+            mirarY = (e.clientY / window.innerHeight) * 2 - 1;
+        });
+
+        window.addEventListener('resize', () => {
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+    </script>
+</body>
+</html>
