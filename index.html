@@ -2,22 +2,26 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Montaña Rusa 3D - Edición Looping</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body, html {
             width: 100%;
             height: 100%;
+            height: 100dvh;
             background-color: #000000;
             overflow: hidden;
             font-family: 'Courier New', Courier, monospace;
             user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
         }
 
         /* --- PANTALLA DE INICIO EN NEGRO --- */
@@ -28,42 +32,58 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            padding: 20px;
             z-index: 30;
             transition: opacity 0.6s ease;
         }
 
         #btn-inicio {
-            background-color: transparent;
-            color: #999999;
-            border: 1px solid #333333;
-            padding: 8px 22px;
-            font-size: 13px;
-            letter-spacing: 3px;
+            background-color: rgba(0, 243, 255, 0.06);
+            color: #e0e0e0;
+            border: 1px solid #00f3ff;
+            padding: 14px 36px;
+            font-size: 16px;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            letter-spacing: 4px;
             text-transform: uppercase;
             cursor: pointer;
-            border-radius: 3px;
-            transition: all 0.3s ease;
+            border-radius: 6px;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.25);
+            transition: all 0.2s ease;
         }
 
-        #btn-inicio:hover {
+        #btn-inicio:hover,
+        #btn-inicio:active {
             color: #ffffff;
-            border-color: #00f3ff;
-            box-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
+            background-color: rgba(0, 243, 255, 0.2);
+            box-shadow: 0 0 22px rgba(0, 243, 255, 0.55);
+            transform: scale(0.98);
         }
 
         /* --- CONTENEDOR 3D --- */
         #escena-3d {
             position: fixed;
             inset: 0;
+            width: 100%;
+            height: 100%;
             display: none;
             z-index: 10;
+            touch-action: none;
+        }
+
+        #escena-3d canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
         }
 
         /* --- INDICADORES EN PANTALLA (HUD) --- */
         #hud-inferior {
             position: fixed;
-            bottom: 18px;
-            left: 20px;
+            bottom: calc(16px + env(safe-area-inset-bottom));
+            left: calc(16px + env(safe-area-inset-left));
+            right: calc(16px + env(safe-area-inset-right));
             display: none;
             flex-direction: column;
             gap: 4px;
@@ -72,46 +92,84 @@
         }
 
         .dato-hud {
-            color: rgba(0, 243, 255, 0.85);
+            color: rgba(0, 243, 255, 0.92);
             font-size: 13px;
-            letter-spacing: 2px;
-            text-shadow: 0 0 8px rgba(0, 243, 255, 0.5);
+            letter-spacing: 1.5px;
+            text-shadow: 0 0 8px rgba(0, 243, 255, 0.6);
+            line-height: 1.35;
         }
 
         .sub-hud {
-            color: rgba(255, 255, 255, 0.45);
+            color: rgba(255, 255, 255, 0.55);
             font-size: 11px;
-            letter-spacing: 1px;
+            letter-spacing: 0.8px;
         }
 
         /* --- BOTONES SUPERIORES DERECHOS --- */
         #controles-superiores {
             position: fixed;
-            top: 16px;
-            right: 16px;
+            top: calc(14px + env(safe-area-inset-top));
+            right: calc(14px + env(safe-area-inset-right));
+            left: calc(14px + env(safe-area-inset-left));
             display: none;
+            justify-content: flex-end;
+            flex-wrap: wrap;
             gap: 8px;
             z-index: 40;
+            pointer-events: none;
         }
 
         .btn-mini {
-            background: rgba(0, 0, 0, 0.65);
+            pointer-events: auto;
+            background: rgba(0, 0, 0, 0.72);
             color: #e0e0e0;
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            padding: 6px 12px;
-            font-size: 11px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 9px 14px;
+            font-size: 12px;
             font-family: Arial, sans-serif;
-            letter-spacing: 1px;
-            border-radius: 4px;
+            font-weight: bold;
+            letter-spacing: 0.8px;
+            border-radius: 6px;
             cursor: pointer;
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
             transition: all 0.2s ease;
         }
 
-        .btn-mini:hover {
-            background: rgba(255, 255, 255, 0.15);
+        .btn-mini:hover,
+        .btn-mini:active {
+            background: rgba(0, 243, 255, 0.2);
             border-color: #00f3ff;
             color: #ffffff;
+        }
+
+        /* --- AJUSTES ESPECÍFICOS PARA MÓVIL --- */
+        @media (max-width: 600px) {
+            #btn-inicio {
+                padding: 16px 42px;
+                font-size: 17px;
+            }
+
+            .btn-mini {
+                padding: 10px 14px;
+                font-size: 12px;
+            }
+
+            .dato-hud {
+                font-size: 12px;
+                letter-spacing: 1px;
+                background: rgba(0, 0, 0, 0.45);
+                padding: 6px 10px;
+                border-radius: 4px;
+                border-left: 2px solid #00f3ff;
+                width: fit-content;
+                max-width: 100%;
+            }
+
+            .sub-hud {
+                font-size: 11px;
+                padding-left: 2px;
+            }
         }
     </style>
 </head>
@@ -130,8 +188,8 @@
 
     <!-- Telemetría discreta -->
     <div id="hud-inferior">
-        <div class="dato-hud">VELOCIDAD: <span id="kmh">0</span> KM/H // ALTURA: <span id="altitud">0</span> M</div>
-        <div class="sub-hud">Mueve el ratón para mirar alrededor</div>
+        <div class="dato-hud">VEL: <span id="kmh">0</span> KM/H // ALT: <span id="altitud">0</span> M</div>
+        <div class="sub-hud" id="texto-ayuda">Mueve el ratón para mirar alrededor</div>
     </div>
 
     <!-- Botones superiores derechos -->
@@ -150,10 +208,17 @@
         const hudInferior = document.getElementById('hud-inferior');
         const textoKmh = document.getElementById('kmh');
         const textoAltitud = document.getElementById('altitud');
+        const textoAyuda = document.getElementById('texto-ayuda');
         const btnInicio = document.getElementById('btn-inicio');
         const btnAudio = document.getElementById('btn-audio');
         const btnVolver = document.getElementById('btn-volver');
         const musicaMp3 = document.getElementById('musica-mp3');
+
+        // Detectar dispositivo táctil para adaptar texto de ayuda
+        const esTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        if (esTactil) {
+            textoAyuda.textContent = 'Desliza el dedo para mirar alrededor';
+        }
 
         let sonidoActivo = true;
         let usandoMp3 = false;
@@ -274,19 +339,29 @@
         let progreso = 0;
         let velocidad = 0.00075;
         let mirarX = 0, mirarY = 0;
+        let tocandoPantalla = false;
+        let toqueInicioX = 0, toqueInicioY = 0;
+
+        function obtenerFovBase() {
+            // Amplía ligeramente el campo de visión en pantallas verticales (móvil portrait)
+            const aspecto = window.innerWidth / window.innerHeight;
+            return aspecto < 1 ? 84 : 74;
+        }
 
         function iniciarMontanaRusa() {
             escena3D.innerHTML = '';
             progreso = 0;
             velocidad = 0.00075;
+            mirarX = 0;
+            mirarY = 0;
 
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x02040a);
             scene.fog = new THREE.FogExp2(0x02040a, 0.0075);
 
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 450);
+            camera = new THREE.PerspectiveCamera(obtenerFovBase(), window.innerWidth / window.innerHeight, 0.1, 450);
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             escena3D.appendChild(renderer.domElement);
@@ -385,7 +460,7 @@
                 actualizarAudioVagon(factorVel);
 
                 // Efecto vértigo: abrir ligeramente el ángulo de visión (FOV) al ir muy rápido
-                const fovObjetivo = 74 + factorVel * 18;
+                const fovObjetivo = obtenerFovBase() + factorVel * 18;
                 camera.fov += (fovObjetivo - camera.fov) * 0.08;
                 camera.updateProjectionMatrix();
 
@@ -393,7 +468,7 @@
                 const tangenteFutura = curvaVia.getPointAt((progreso + 0.015) % 1).sub(posActual).normalize();
                 const ejeLateral = new THREE.Vector3().crossVectors(tangente, arribaActual).normalize();
 
-                // Si estamos en el looping (entre t=0.20 y t=0.42), dejar que el vector arriba siga la curva vertical
+                // Si estamos en el looping (entre t=0.20 y t=0.43), dejar que el vector arriba siga la curva vertical
                 const enLooping = (progreso > 0.20 && progreso < 0.43);
                 const arribaObjetivo = new THREE.Vector3().crossVectors(ejeLateral, tangente).normalize();
 
@@ -416,7 +491,13 @@
                 const offsetOjos = new THREE.Vector3(0, 1.35, -0.2).applyQuaternion(grupoVagon.quaternion);
                 camera.position.copy(posActual).add(offsetOjos);
 
-                // Permitir mirar a los lados dentro del vagón con el ratón
+                // En móvil, centrar suavemente la vista al levantar el dedo
+                if (esTactil && !tocandoPantalla) {
+                    mirarX *= 0.92;
+                    mirarY *= 0.92;
+                }
+
+                // Permitir mirar a los lados dentro del vagón (ratón o táctil)
                 const rotacionCabeza = new THREE.Euler(-mirarY * 0.45, -mirarX * 0.85, 0, 'YXZ');
                 const quatCabeza = new THREE.Quaternion().setFromEuler(rotacionCabeza);
                 camera.quaternion.copy(grupoVagon.quaternion).multiply(quatCabeza);
@@ -616,17 +697,48 @@
             pantallaInicio.style.display = 'flex';
         });
 
+        // --- CONTROL DE CÁMARA: RATÓN (PC) Y TÁCTIL (MÓVIL) ---
         window.addEventListener('mousemove', (e) => {
+            if (esTactil) return;
             mirarX = (e.clientX / window.innerWidth) * 2 - 1;
             mirarY = (e.clientY / window.innerHeight) * 2 - 1;
         });
 
-        window.addEventListener('resize', () => {
+        escena3D.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 0) {
+                tocandoPantalla = true;
+                toqueInicioX = e.touches[0].clientX;
+                toqueInicioY = e.touches[0].clientY;
+            }
+        }, { passive: true });
+
+        escena3D.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 0 && tocandoPantalla) {
+                const deltaX = (e.touches[0].clientX - toqueInicioX) / (window.innerWidth * 0.45);
+                const deltaY = (e.touches[0].clientY - toqueInicioY) / (window.innerHeight * 0.45);
+                mirarX = Math.max(-1.2, Math.min(1.2, deltaX));
+                mirarY = Math.max(-1.0, Math.min(1.0, deltaY));
+            }
+        }, { passive: true });
+
+        escena3D.addEventListener('touchend', () => {
+            tocandoPantalla = false;
+        });
+
+        // --- REDIMENSIONAMIENTO Y CAMBIO DE ORIENTACIÓN ---
+        function ajustarTamanoPantalla() {
             if (camera && renderer) {
                 camera.aspect = window.innerWidth / window.innerHeight;
+                camera.fov = obtenerFovBase();
                 camera.updateProjectionMatrix();
                 renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             }
+        }
+
+        window.addEventListener('resize', ajustarTamanoPantalla);
+        window.addEventListener('orientationchange', () => {
+            setTimeout(ajustarTamanoPantalla, 150);
         });
     </script>
 </body>
